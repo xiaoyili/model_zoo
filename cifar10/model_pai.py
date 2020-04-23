@@ -13,7 +13,7 @@ tf.app.flags.DEFINE_string("input_pattern", "", "Input tfrecord data pattern")
 tf.app.flags.DEFINE_string("model_dir", "./output", "Directory for export model")
 tf.app.flags.DEFINE_integer("batch_size", 32, "batch size")
 tf.app.flags.DEFINE_integer("max_steps", 2000, "max training steps")
-tf.app.flags.DEFINE_integer("gpu_num", 8, "number of gpus")
+tf.app.flags.DEFINE_integer("gpu_num", 4, "number of gpus")
 tf.app.flags.DEFINE_integer("save_summary_steps", 1000, "save summary per steps")
 tf.app.flags.DEFINE_integer("log_step_count_steps", 100, "log per steps")
 
@@ -97,7 +97,8 @@ def parse_dataset(ds, batch_size=32):
         return data, label
 
     return ds.map(decode, num_parallel_calls=8)      \
-             .shuffle(2000)                          \
+             .cache()                                \
+             .shuffle(50000)                         \
              .batch(batch_size, drop_remainder=True) \
              .prefetch(batch_size*3)                 \
              .repeat(-1)
@@ -175,10 +176,11 @@ def main():
             session_config=session_config,
             save_summary_steps=FLAGS.save_summary_steps,
             log_step_count_steps=FLAGS.log_step_count_steps))
-    hooks=None
-    estimator.train(input_fn=train_input_fn,
-                    max_steps=FLAGS.max_steps,
-                    hooks=hooks)
+
+    train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn,
+                                        max_steps=FLAGS.max_steps)
+    eval_spec = tf.estimator.EvalSpec(input_fn=lambda:None)
+    tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
     print('===End of program.===')
 
