@@ -74,9 +74,41 @@ def create_model():
 
     return model
 
+def get_files_slice(files):
+  import json
+  import os
+  tf_config = os.environ.get("TF_CONFIG")
+  if not tf_config:
+    return files
+  tf_config_json = json.loads(tf_config)
+  task_type = tf_config_json.get("task", {}).get("type")
+  chief = tf_config_json.get("cluster",{}).get("chief")
+  worker = tf_config_json.get("cluster",{}).get("worker")
+
+  num_chief = 0
+  num_worker = 0
+  if chief:
+    num_chief = len(chief)
+  if worker:
+    num_worker = len(worker)
+  num_total = num_chief + num_worker
+
+  if task_type == "chief":
+    task_index = tf_config_json.get("task", {}).get("index")
+  else:
+    task_index = tf_config_json.get("task", {}).get("index") + num_chief
+
+  files.sort()
+  files_slice = [f for i, f in enumerate(files) if i % num_total == task_index]
+  print("number of workers:", num_total,
+        " task_index:", task_index,
+        " files slice:", files_slice)
+  return files_slice
+
 
 def get_dataset(ds_pattern):
     files = tf.io.gfile.glob(ds_pattern)
+    files = get_files_slice(files)
     if not files:
         raise RuntimeError("Could not find any files: {}".format(ds_pattern))
     ds = tf.data.TFRecordDataset(files, num_parallel_reads=4)
